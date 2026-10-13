@@ -341,8 +341,9 @@ nav.tabs button[aria-current=page] { background: var(--ice-soft); color: var(--i
 
     if (isSun) h += '<div class="note">It is Sunday. Take your weekly photo in the same spot and light as last week.</div>';
 
-    h += '<section class="card"><h3>Body</h3><div class="field"><label class="grow"><span class="label">Weight (kg), morning, after the toilet</span>' +
+    h += '<section class="card"><h3>Body</h3><div class="field"><label class="grow"><span class="label">Weight (kg), at the gym, same time every day</span>' +
       '<input id="wt" type="number" inputmode="decimal" step="0.1" min="30" max="200" placeholder="e.g. 66.2" value="' + (d.w == null ? "" : d.w) + '"></label></div>' +
+      '<div class="small muted">Evening weights run 1 to 2 kg above morning ones. Use the same scale at the same time and trust the 7 day average.</div>' +
       '<label><span class="label">Steps</span><input id="steps" type="number" inputmode="numeric" step="100" min="0" placeholder="Goal ' + STEPS + '" value="' + (d.steps == null ? "" : d.steps) + '" style="width:100%;height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)"></label>' +
       '<div class="checks">' + CHECKS.map(function (c) {
         return '<button class="check" data-act="chk" data-id="' + c.id + '" aria-pressed="' + (!!d.chk[c.id]) + '"><span class="box"></span>' + c.n + '</button>';
@@ -383,9 +384,9 @@ nav.tabs button[aria-current=page] { background: var(--ice-soft); color: var(--i
     });
   }
 
-  function chart(ws, av) {
+  function chart(ws, av, sw, gw) {
     var W = 340, H = 200, L = 34, R = 10, T = 10, B = 24;
-    var all = ws.map(function (p) { return p.w; }).concat([START_W, GOAL_W]);
+    var all = ws.map(function (p) { return p.w; }).concat([sw, gw]);
     var lo = Math.floor(Math.min.apply(null, all) - 0.5), hi = Math.ceil(Math.max.apply(null, all) + 0.5);
     function X(i) { return L + (W - L - R) * i / TOTAL; }
     function Y(w) { return T + (H - T - B) * (hi - w) / (hi - lo); }
@@ -397,7 +398,7 @@ nav.tabs button[aria-current=page] { background: var(--ice-soft); color: var(--i
       var k = keyAt(i), dt = new Date(utc(k));
       s += '<text x="' + X(i) + '" y="' + (H - 6) + '" text-anchor="' + (i === 0 ? "start" : i === TOTAL ? "end" : "middle") + '">' + dt.getUTCDate() + " " + dt.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }) + '</text>';
     });
-    s += '<line x1="' + X(0) + '" y1="' + Y(START_W) + '" x2="' + X(TOTAL) + '" y2="' + Y(GOAL_W) + '" stroke="var(--ember)" stroke-width="2" stroke-dasharray="5 4"/>';
+    s += '<line x1="' + X(0) + '" y1="' + Y(sw) + '" x2="' + X(TOTAL) + '" y2="' + Y(gw) + '" stroke="var(--ember)" stroke-width="2" stroke-dasharray="5 4"/>';
     if (av.length > 1) s += '<polyline fill="none" stroke="var(--ice)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="' + av.map(function (p) { return X(p.i) + "," + Y(p.w); }).join(" ") + '"/>';
     ws.forEach(function (p) { s += '<circle cx="' + X(p.i) + '" cy="' + Y(p.w) + '" r="3" fill="var(--muted)"/>'; });
     if (av.length) { var e = av[av.length - 1]; s += '<circle cx="' + X(e.i) + '" cy="' + Y(e.w) + '" r="5" fill="var(--ice)" stroke="var(--surface)" stroke-width="2"/>'; }
@@ -414,19 +415,24 @@ nav.tabs button[aria-current=page] { background: var(--ice-soft); color: var(--i
     return n;
   }
 
+  function baseW(ws) {
+    if (!ws.length) return START_W;
+    var f = ws.slice(0, 3);
+    return r1(f.reduce(function (a, q) { return a + q.w; }, 0) / f.length);
+  }
   function viewProgress() {
-    var ws = weights(), av = avg7(ws), tk = todayKey(), el = Math.min(TOTAL, Math.max(0, idx(tk)));
+    var ws = weights(), sw = baseW(ws), gw = r1(sw - 3.5), av = avg7(ws), tk = todayKey(), el = Math.min(TOTAL, Math.max(0, idx(tk)));
     var last = ws.length ? ws[ws.length - 1].w : null, lastAv = av.length ? av[av.length - 1].w : null;
     var weeksLeft = Math.max(0.5, (TOTAL - el) / 7);
-    var pace = (lastAv != null && el >= 7) ? r1((START_W - lastAv) / (el / 7)) : null;
-    var need = lastAv != null ? r1(Math.max(0, (lastAv - GOAL_W) / weeksLeft)) : null;
-    var h = '<section class="card"><h3>Weight</h3>' + chart(ws, av) +
-      '<div class="legend"><span style="--c:var(--ice)">7 day average</span><span style="--c:var(--muted)">Daily weight</span><span style="--c:var(--ember)">Path to ' + GOAL_W + ' kg</span></div>' +
+    var pace = (lastAv != null && el >= 7) ? r1((sw - lastAv) / (el / 7)) : null;
+    var need = lastAv != null ? r1(Math.max(0, (lastAv - gw) / weeksLeft)) : null;
+    var h = '<section class="card"><h3>Weight</h3>' + chart(ws, av, sw, gw) +
+      '<div class="legend"><span style="--c:var(--ice)">7 day average</span><span style="--c:var(--muted)">Daily weight</span><span style="--c:var(--ember)">Path to ' + gw + ' kg</span></div>' +
       (ws.length ? "" : '<div class="small muted">No weigh ins yet. Log your weight on the Today tab and the line will start here.</div>') + '</section>';
     h += '<section class="stats">' +
-      stat("Start", START_W, "kg") + stat("Latest", last == null ? "&ndash;" : last, last == null ? "" : "kg") +
+      stat("Start", sw, "kg") + stat("Latest", last == null ? "&ndash;" : last, last == null ? "" : "kg") +
       stat("7 day average", lastAv == null ? "&ndash;" : r1(lastAv), lastAv == null ? "" : "kg") +
-      stat("Lost so far", last == null ? "&ndash;" : r1(START_W - lastAv), last == null ? "" : "kg") +
+      stat("Lost so far", last == null ? "&ndash;" : r1(sw - lastAv), last == null ? "" : "kg") +
       stat("Pace per week", pace == null ? "&ndash;" : pace, pace == null ? "after week 1" : "kg") +
       stat("Needed per week", need == null ? "&ndash;" : need, need == null ? "" : "kg") + '</section>';
     var cells = "";
@@ -448,7 +454,7 @@ nav.tabs button[aria-current=page] { background: var(--ice-soft); color: var(--i
     }).join("");
     h += '<div class="note">Snack swap: 200 g curd and 20 g peanuts is about 235 kcal and 12 g protein if you want real food instead of the scoop.</div>';
     h += '<section class="card"><h3>Cut these first</h3><div>Sugary drinks and juice, fried snacks, sweets, white bread and eating out. Keep one flexible meal a week so the plan lasts.</div></section>';
-    h += '<section class="card"><h3>Reality check</h3><div>By 1 Dec expect about 63 kg, a smaller waist and a faint upper ab outline. Lower belly fat goes last. A crisp six pack is a late January to February result if you stay on this.</div></section>';
+    h += '<section class="card"><h3>Reality check</h3><div>By 1 Dec expect about 3 to 4 kg lower than your first weigh in, a smaller waist and a faint upper ab outline. Lower belly fat goes last. A crisp six pack is a late January to February result if you stay on this.</div></section>';
     return h;
   }
 
