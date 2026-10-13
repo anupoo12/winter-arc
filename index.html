@@ -251,12 +251,12 @@ nav.tabs button[aria-current=page] { background: var(--ice-soft); color: var(--i
 
   /* ---------- storage ---------- */
   function setSync(t) { S.sync = t; var el = document.getElementById("sync"); if (el) el.textContent = t; }
-  function localSave() { try { localStorage.setItem("winterarc", JSON.stringify({ days: S.days, shop: S.shop })); } catch (e) {} }
+  function localSave() { try { localStorage.setItem("winterarc", JSON.stringify({ days: S.days, shop: S.shop })); return localStorage.getItem("winterarc") != null; } catch (e) { return false; } }
   function localLoad() {
     try { var v = JSON.parse(localStorage.getItem("winterarc") || "null"); if (v) { S.days = v.days || {}; S.shop = v.shop || { done: {} }; } } catch (e) {}
   }
   function touch(k) {
-    if (!db) { localSave(); setSync("Saved on this device only"); return; }
+    if (!db) { setSync(localSave() ? "Saved on this device only" : "NOT saving. Open in Chrome or Safari, not a private tab or an in-app browser."); return; }
     dirty[k] = true; setSync("Saving");
     clearTimeout(timers[k]); timers[k] = setTimeout(function () { flush(k); }, 500);
   }
@@ -289,7 +289,7 @@ nav.tabs button[aria-current=page] { background: var(--ice-soft); color: var(--i
     var p;
     try { p = window.claude && window.claude.use ? window.claude.use("db") : Promise.resolve(null); } catch (e) { p = Promise.resolve(null); }
     p.then(function (h) { return h; }, function () { return null; }).then(function (h) {
-      if (!h) { localLoad(); setSync("Saved on this device only"); render(); return; }
+      if (!h) { localLoad(); try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {} setSync(localSave() ? "Saved on this device only" : "NOT saving. Open in Chrome or Safari, not a private tab or an in-app browser."); render(); return; }
       db = h; S.mode = "db";
       h.collection("days").onSnapshot(function (snap) {
         var changed = false;
